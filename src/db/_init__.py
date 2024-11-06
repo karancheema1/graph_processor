@@ -1,0 +1,1 @@
+from src.db.models import Graph, Node, Edge  # This ensures models are imported when db package is imported

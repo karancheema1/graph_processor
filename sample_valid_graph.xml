@@ -1,0 +1,38 @@
+<graph>
+    <id>test_graph</id>
+    <name>Test Graph</name>
+    <nodes>
+        <node>
+            <id>a</id>
+            <name>A name</name>
+        </node>
+        <node>
+            <id>b</id>
+            <name>B name</name>
+        </node>
+        <node>
+            <id>e</id>
+            <name>E name</name>
+        </node>
+    </nodes>
+    <edges>
+        <node>
+            <id>e1</id>
+            <from>a</from>
+            <to>e</to>
+            <cost>42</cost>
+        </node>
+        <node>
+            <id>e2</id>
+            <from>a</from>
+            <to>b</to>
+            <cost>1</cost>
+        </node>
+        <node>
+            <id>e3</id>
+            <from>b</from>
+            <to>e</to>
+            <cost>2</cost>
+        </node>
+    </edges>
+</graph>

@@ -1,0 +1,266 @@
+# Graph Processor
+
+A Python service that processes directed graph data from XML files and handles path queries via JSON. It also handels path finding (all paths as well as based off cost), and cycle detection.
+
+## Features
+
+- XML graph parsing with validation
+- PostgreSQL storage
+- Path finding (all possible paths and cheapest paths)
+- Cycle detection
+- JSON-based query interface
+
+## Technical Implementation Details
+
+### XML Parsing Library Choice: lxml
+
+I chose the `lxml` library for XML processing because:
+- High performance with C-based implementation
+- Built-in validation capabilities
+- Robust error handling
+- Memory efficiency for large XML files
+
+### JSON Processing: Built-in json Library
+
+The standard Python `json` library was chosen because:
+- Part of Python standard library
+- Sufficient performance for our use case
+- Simple, well-documented API
+- Type safety with Python data structures
+
+## Database Schema
+
+PostgreSQL was chosen with the following considerations:
+- ACID compliance for data integrity
+- Advanced indexing capabilities
+- Support for complex queries (especially for cycle detection)
+
+The schema consists of three main tables (for sql schema implementation see src/db/migrations/01_create_schema.sql):
+```sql
+graphs
+- id (TEXT): Primary key
+- name (TEXT): Graph name
+
+nodes
+- id (SERIAL): Internal identifier
+- node_id (TEXT): XML-provided identifier
+- name (TEXT): Node name
+- graph_id (TEXT): Foreign key to graphs
+
+edges
+- id (SERIAL): Internal identifier
+- edge_id (TEXT): XML-provided identifier
+- from_node_id (INTEGER): Source node reference
+- to_node_id (INTEGER): Target node reference
+- cost (FLOAT): Edge cost (defaulted to 0.0)
+- graph_id (TEXT): Foreign key to graphs
+```
+
+## Algorithm Implementations
+
+### Path Finding
+
+Two strategies are implemented:
+
+1. **All Paths (DFS-based)**:
+   - Uses depth-first search with backtracking
+   - Maintains visited set to prevent cycles
+   - Time complexity: O(V * E) where V = vertices, E = edges
+   - Space complexity: O(V) for the recursion stack
+
+2. **Cheapest Path (Dijkstra's Algorithm)**:
+   - Uses priority queue for efficient path selection
+   - Handles floating-point costs
+   - Time complexity: O((V + E) * log V)
+   - Space complexity: O(V)
+
+### Cycle Detection
+
+Implemented using a recursive SQL function (see src/db/migrations/02_create_cycle_detection.sql) that:
+- Uses recursive CTEs for path exploration
+- Normalizes cycles to start with lowest node ID
+- Eliminates duplicate cycles
+- Returns cycles as arrays of node IDs
+
+## Setup and Usage
+
+### Using Docker
+
+1. Install Docker and Docker Compose
+2. Clone the repository
+3. Start services:
+```bash
+docker-compose up --build
+```
+
+### Processing Graphs
+
+Sample Files and Usage Examples
+The project includes three sample files to demonstrate functionality:
+
+sample_valid_graph.xml - A valid graph with three nodes and edges
+sample_invalid_graph.xml - An invalid graph with duplicate node IDs
+sample_input.json - Sample queries for path finding
+
+Command Examples
+
+Parse an XML file (validates without saving):
+
+bashCopydocker-compose run app python -m src.main parse sample_valid_graph.xml
+Output:
+CopyParsing successful! Graph structure:
+Graph ID: test_graph
+Graph Name: Test Graph
+Number of nodes: 3
+Number of edges: 3
+
+Parse an invalid XML file:
+
+bashCopydocker-compose run --rm app python -m src.main parse sample_invalid_graph.xml
+Output:
+CopyError: Duplicate node id found: a
+
+Process queries from JSON:
+
+bashCopydocker-compose exec -T app python -m src.main query < sample_input.json
+Output:
+jsonCopy{
+  "answers": [
+    {
+      "paths": {
+        "from": "a",
+        "to": "e",
+        "paths": [
+          ["a", "e"],
+          ["a", "b", "e"]
+        ]
+      }
+    },
+    {
+      "cheapest": {
+        "from": "a",
+        "to": "e",
+        "path": ["a", "b", "e"]
+      }
+    },
+    {
+      "paths": {
+        "from": "a",
+        "to": "c",
+        "paths": []
+      }
+    },
+    {
+      "cheapest": {
+        "from": "a",
+        "to": "h",
+        "path": false
+      }
+    }
+  ]
+}
+Sample Files Content
+
+sample_valid_graph.xml:
+
+xmlCopy<graph>
+    <id>test_graph</id>
+    <name>Test Graph</name>
+    <nodes>
+        <node>
+            <id>a</id>
+            <name>A name</name>
+        </node>
+        <node>
+            <id>b</id>
+            <name>B name</name>
+        </node>
+        <node>
+            <id>e</id>
+            <name>E name</name>
+        </node>
+    </nodes>
+    <edges>
+        <node>
+            <id>e1</id>
+            <from>a</from>
+            <to>e</to>
+            <cost>42</cost>
+        </node>
+        <node>
+            <id>e2</id>
+            <from>a</from>
+            <to>b</to>
+            <cost>1</cost>
+        </node>
+        <node>
+            <id>e3</id>
+            <from>b</from>
+            <to>e</to>
+            <cost>2</cost>
+        </node>
+    </edges>
+</graph>
+
+sample_input.json:
+
+jsonCopy{
+  "graph_id": "test_graph",
+  "queries": [
+    {
+      "paths": {
+        "start": "a",
+        "end": "e"
+      }
+    },
+    {
+      "cheapest": {
+        "start": "a",
+        "end": "e"
+      }
+    },
+    {
+      "paths": {
+        "start": "a",
+        "end": "c"
+      }
+    },
+    {
+      "cheapest": {
+        "start": "a",
+        "end": "h"
+      }
+    }
+  ]
+}
+The output from these examples demonstrates:
+
+XML validation (both success and failure cases)
+Finding all possible paths between nodes
+Finding the cheapest path between nodes
+Handling cases where no path exists
+Error handling for invalid inputs
+
+## Development
+
+### Running Tests
+```bash
+docker-compose run --rm app pytest
+*NOTE Did not have time to create a test db so running tests will clear the DB!
+
+### Database Access
+```bash
+docker-compose exec db psql -U postgres -d graphs
+```
+
+## Project Structure
+```
+graph-processor/
+├── src/
+│   ├── xml_processor/  # XML parsing and validation
+│   ├── db/            # Database models and migrations
+│   ├── graph/         # Path finding and cycle detection
+│   └── utils/         # Common utilities
+├── tests/             # Test suite
+└── docker/           # Docker configuration
+```
